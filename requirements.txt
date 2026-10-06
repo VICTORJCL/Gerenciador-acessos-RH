@@ -1,0 +1,5 @@
+# peewee 4 fala com Postgres via psycopg 3; peewee 3 exigiria psycopg2-binary
+peewee>=4.5.1
+psycopg[binary]>=3.3
+python-dotenv>=1.0
+requests>=2.32
