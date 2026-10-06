@@ -1,7 +1,7 @@
-# Chamado de acessos para admitidos
+# RH — acessos para novos colaboradores
 
 Abre um chamado no Acelerato pedindo à TI o cadastro do Cód Zanthus dos
-funcionários recém-admitidos, põe os gestores em cópia e acompanha o status até
+colaboradores recém-admitidos, põe os gestores em cópia e acompanha o status até
 a conclusão.
 
 ## Como usar
