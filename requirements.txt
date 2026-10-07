@@ -1,5 +1,6 @@
-# peewee 4 fala com Postgres via psycopg 3; peewee 3 exigiria psycopg2-binary
+# peewee escolhe o driver sozinho: usa psycopg2 quando existe e psycopg 3 como
+# alternativa. psycopg2-binary é o do rh_db, para o pacote rodar encaixado nele.
 peewee>=4.5.1
-psycopg[binary]>=3.3
+psycopg2-binary>=2.9
 python-dotenv>=1.0
 requests>=2.32

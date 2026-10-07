@@ -1,9 +1,7 @@
-import sys
+from .rotina_de_acessos import criar_rotina_de_acessos
 
-from rotina_de_acessos import criar_rotina_de_acessos
-
-class AdmitidosRotina():
-    def main(simular: bool = False) -> None:
+class AdmitidosRotina:
+    def main(self, simular: bool = False) -> None:
         resultado = criar_rotina_de_acessos(simular=simular).executar()
 
         if simular:
@@ -48,8 +46,3 @@ class AdmitidosRotina():
 
         for falha in resultado.falhas:
             print(f"FALHA: {falha}")
-
-
-if __name__ == "__main__":
-    rotina = AdmitidosRotina()
-    rotina.main(simular="--simular" in sys.argv)

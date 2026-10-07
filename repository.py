@@ -2,9 +2,9 @@ from datetime import date
 
 from typing import Iterable, Sequence
 
-from acelerato import StatusChamado
-from fonte_rh import Admitido
-from models import TableAcessoSolicitado, TableChamado
+from .acelerato import StatusChamado
+from .fonte_rh import Admitido
+from .models import TableAcessoSolicitado, TableChamado
 
 
 class RepositorioDeChamados:

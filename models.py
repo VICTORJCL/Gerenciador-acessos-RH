@@ -1,9 +1,6 @@
-import os
 from contextlib import contextmanager
 from datetime import date
-from pathlib import Path
 
-from dotenv import load_dotenv
 from peewee import (
     CharField,
     CompositeKey,
@@ -14,21 +11,11 @@ from peewee import (
     TextField,
 )
 
+from .config import carregar_ambiente, ler_banco
 
+carregar_ambiente()
 
-# Caminho fixo: `load_dotenv()` sem argumento procura a partir do diretório de
-# trabalho, e com isso o banco mudava conforme de onde o programa fosse chamado.
-ARQUIVO_DE_AMBIENTE = Path(__file__).parent / ".env"
-
-load_dotenv(ARQUIVO_DE_AMBIENTE)
-
-db = PostgresqlDatabase(
-    database=os.getenv("RH_FONTE_DB_NAME"),
-    user=os.getenv("RH_FONTE_DB_USER"),
-    password=os.getenv("RH_FONTE_DB_PASSWORD"),
-    host=os.getenv("RH_FONTE_DB_HOST"),
-    port=int(os.getenv("RH_FONTE_DB_PORT")),
-)
+db = PostgresqlDatabase(**ler_banco("RH_FONTE_DB", alternativo="DB"))
 
 @contextmanager
 def db_session():
@@ -78,12 +65,6 @@ class TableAcessoSolicitado(BaseModel):
 
 
 def conectar_mpcore() -> PostgresqlDatabase:
-    banco = PostgresqlDatabase(
-        database=os.getenv("MPCORE_DB_NAME"),
-        user=os.getenv("MPCORE_DB_USER"),
-        password=os.getenv("MPCORE_DB_PASSWORD"),
-        host=os.getenv("MPCORE_DB_HOST"),
-        port=int(os.getenv("MPCORE_DB_PORT")),
-    )
+    banco = PostgresqlDatabase(**ler_banco("MPCORE_DB"))
     banco.connect()
     return banco

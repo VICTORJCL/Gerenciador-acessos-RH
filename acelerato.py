@@ -1,12 +1,12 @@
 import os
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 from typing import Sequence
 
 import requests
-from dotenv import load_dotenv
 from requests.auth import HTTPBasicAuth
+
+from .config import carregar_ambiente
 
 TIMEOUT_EM_SEGUNDOS = 30
 KANBAN_STATUS_KEY_CONCLUIDO = 15
@@ -192,7 +192,7 @@ class AceleratoAPI:
 
 
 def criar_cliente_acelerato() -> AceleratoAPI:
-    load_dotenv(Path(__file__).parent / ".env")
+    carregar_ambiente()
     email = _ler_variavel("EMAIL_ACELERATO")
     solicitante = _ler_variavel("ACELERATO_EMAIL_SOLICITANTE")
 

@@ -2,9 +2,9 @@ from dataclasses import replace
 from html import escape
 from typing import Mapping, Sequence
 
-from acelerato import AceleratoAPI
-from fonte_rh import Admitido
-from gestores import Gestor
+from .acelerato import AceleratoAPI
+from .fonte_rh import Admitido
+from .gestores import Gestor
 
 COLUNAS_DA_TABELA = ("Filial", "Nome", "CPF", "Função", "Data Admissão", "Supervisor")
 ABERTURA = "Bom dia"

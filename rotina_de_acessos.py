@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
 from typing import Sequence
 
-from acelerato import AceleratoAPI, ErroDoAcelerato, StatusChamado
-from fonte_mpcore import RepositorioDeEmailsDaLoja, RepositorioDeVagas
-from chamado_acessos import abrir_chamado_de_acessos, aplicar_gestores, montar_titulo
-from fonte_rh import RepositorioDeAdmitidos, RepositorioDeChefia
-from gestores import resolver_gestor
-from repository import RepositorioDeChamados
+from .acelerato import AceleratoAPI, ErroDoAcelerato, StatusChamado
+from .fonte_mpcore import RepositorioDeEmailsDaLoja, RepositorioDeVagas
+from .chamado_acessos import abrir_chamado_de_acessos, aplicar_gestores, montar_titulo
+from .fonte_rh import RepositorioDeAdmitidos, RepositorioDeChefia
+from .gestores import resolver_gestor
+from .repository import RepositorioDeChamados
 
 
 @dataclass
@@ -131,8 +131,8 @@ class RotinaDeAcessos:
 
 def criar_rotina_de_acessos(dias_de_admissao: int = 2, simular: bool = False) -> RotinaDeAcessos:
     # `simular=True` faz tudo menos abrir chamado e gravar.
-    from acelerato import criar_cliente_acelerato
-    from models import conectar_mpcore, db
+    from .acelerato import criar_cliente_acelerato
+    from .models import conectar_mpcore, db
 
     if db.is_closed():
         db.connect()

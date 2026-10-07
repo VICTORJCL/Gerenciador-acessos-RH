@@ -2,8 +2,8 @@ import unicodedata
 from dataclasses import dataclass, replace
 from typing import Callable, Iterable, Sequence
 
-from fonte_mpcore import VagaDoAdmitido
-from fonte_rh import Chefe
+from .fonte_mpcore import VagaDoAdmitido
+from .fonte_rh import Chefe
 
 CARGO_DE_GERENTE = "gerente de loja"
 PALAVRAS_IGNORADAS = {"de", "da", "do", "dos", "das", "e"}
