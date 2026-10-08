@@ -1,199 +1,165 @@
-# RH — acessos para novos colaboradores
+# Gerenciador de acessos — RH
 
-Abre um chamado no Acelerato pedindo à TI o cadastro do Cód Zanthus dos
-colaboradores recém-admitidos, põe os gestores em cópia e acompanha o status até
-a conclusão.
+Automatiza a abertura e o acompanhamento de chamados de acesso no service desk da
+empresa: pede a **criação** dos acessos de quem foi admitido e a **inativação** dos
+de quem foi desligado, sem intervenção manual do RH.
 
-## Como usar
+Antes: alguém do RH abria cada chamado à mão e conferia o status um por um.
+Ex-funcionário com acesso ativo era achado por acaso.
 
-```python
-from rotina_de_acessos import criar_rotina_de_acessos
+![Python](https://img.shields.io/badge/Python-3.10+-blue)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-2_bases-blue)
+![peewee](https://img.shields.io/badge/ORM-peewee-blue)
 
-resultado = criar_rotina_de_acessos().executar()
-```
+---
 
-Ou direto pelo terminal:
+## O que faz
+
+| Rotina | Dispara | Resultado |
+|---|---|---|
+| **Admissão** | admitido nos últimos 2 dias | chamado "Cadastro de Cód Zanthus" com os gestores em cópia |
+| **Rescisão** | rescisão confirmada, a partir do dia seguinte | chamado "Inativar acessos" |
+| **Acompanhamento** | chamados em aberto | grava o status até o chamado sair de circulação |
+
+Uma execução por dia. O agendamento é externo — a rotina não agenda nada.
 
 ```bash
-python main.py
+python executar.py              # abre os chamados e grava
+python executar.py --simular    # mostra o que seria enviado, sem efeito algum
 ```
 
-Não há agendamento embutido — quem decide quando rodar é de fora (cron,
-botManager, outro job). O esperado é uma execução por dia.
+---
 
-As tabelas de controle são criadas na primeira execução, se não existirem, e
-coluna acrescentada depois é aplicada na execução seguinte.
-
-## O que uma execução faz
+## Arquitetura
 
 ```
-1. Acompanha os chamados em aberto
-     concluído               -> grava `concluido` e para de acompanhar
-     lixeira/arquivado/      -> grava `nao_encontrado` e para de acompanhar
-       mesclado/spam/404
-     erro de API             -> mantém em acompanhamento (erro não é conclusão)
-
-2. Busca os admitidos dos últimos 2 dias
-3. Descarta quem já teve acesso pedido
-4. Resolve o gestor de cada admitido
-5. Abre 1 chamado com todos, gestores em cópia
-6. Grava o chamado e registra os CPFs atendidos
+executar.py                       ponto de entrada (CLI)
+└── rotina_de_acessos.py          orquestra admissão + acompanhamento
+    rotina_de_rescisoes.py        orquestra rescisão
+    ├── gestores.py               decide quem é o gestor (lógica pura, sem I/O)
+    ├── chamado_acessos.py        monta título e corpo HTML
+    │   chamado_rescisoes.py
+    ├── fonte_rh.py               adapter: base do RH
+    ├── fonte_mpcore.py           adapter: base do recrutamento
+    ├── acelerato.py              adapter: API do service desk
+    └── models.py / repository.py persistência (peewee)
 ```
 
-O acompanhamento roda **antes** da abertura, para não consultar um chamado que
-acabou de ser criado.
+Separação por fonte de dados: cada adapter lê **uma** base. O `gestores.py` não
+abre conexão nem chama API — recebe o que as fontes trouxeram e decide. As
+dependências entram pelo construtor; quem lê o `.env` é a fábrica, então importar
+módulo não abre conexão.
 
-### Por que 2 dias
+**1.327 linhas, 13 módulos.**
 
-Os dados do banco são D-1 e a execução é diária, então 2 dias cobrem o dia
-anterior com um dia de folga. A janela não controla duplicata — isso é feito
-pelo registro por pessoa. Ela controla só o alcance para trás.
-
-Se o programa ficar dias sem rodar, quem foi admitido fora da janela não entra
-em chamado nenhum. Para recuperar:
-
-```python
-criar_rotina_de_acessos(dias_de_admissao=5).executar()
-```
-
-### Por que não duplica
-
-Cada admitido atendido fica registrado em `cham_admitidos_acesso` com a chave
-`cpf + data_admissao`. Isso cobre três situações:
-
-- rodar duas vezes no mesmo dia;
-- admissão com data futura, que permanece na janela por vários dias;
-- readmissão — o CPF repete, mas a data de admissão é outra, então o acesso é
-  pedido de novo, corretamente.
+---
 
 ## De onde vêm os dados
 
-Tudo de banco ou de API. Nenhum arquivo de dados no projeto.
+Nenhum arquivo de configuração de dados — tudo de banco ou API.
 
 | Informação | Fonte |
 |---|---|
-| Admitidos recentes | banco `rh`: `mov_funcao` + `cad_funcionario` + `cad_funcao` |
-| Chefia ativa da loja | banco `rh`: mesmas tabelas, filtrando cargos de chefia |
-| Supervisor do admitido | banco `mpcore`: `rh_solicitacaovaga.supervisor`, ligado pelo CPF do candidato em `rh_candidato` / `rh_candidatovaga` |
-| E-mail do gestor | banco `mpcore`: `auth_user` do solicitante da vaga |
-| E-mail do gestor (fallback) | banco `mpcore`: `acessos_perfilacesso` com escopo `LOJA` |
-| `usuarioKey` do seguidor | Acelerato: `GET /usuarios?email=` |
+| Admitidos e rescindidos | base do RH: `mov_funcao` + `cad_funcionario` + `cad_funcao` |
+| Supervisor do admitido | base de recrutamento: vaga do candidato, ligada por CPF |
+| E-mail do gestor | base de recrutamento: usuário solicitante da vaga |
+| E-mail do gestor (fallback) | base de recrutamento: perfil de acesso da loja |
+| `usuarioKey` do seguidor | API do service desk, resolvida pelo e-mail |
 
-O banco `rh` é onde o programa do Quadro de Colaboradores grava o df de
-colaboradores, então ele é esse df já persistido — por isso o programa não
-depende da API Webfopag nem dos anexos de e-mail que alimentam aquele job.
+O gestor é resolvido por uma cascata de 4 fontes, da mais específica à mais
+genérica. **O e-mail nunca é deduzido do nome** — essa tentativa foi medida e
+errou 3 em 10, porque há gestor com e-mail pessoal e outro em domínio diferente.
 
-### Cascata do gestor
+---
 
-Da fonte mais específica para a mais genérica:
+## Decisões técnicas
 
-1. Supervisor informado na vaga, resolvido para o nome completo pela chefia da loja.
-2. Supervisor informado, sem resolver — o nome que o RH digitou vale para a tabela.
-3. Gerente da loja, com o e-mail de quem solicitou a vaga.
-4. Gerente da loja, com o e-mail do perfil de acesso da loja.
+As que custaram mais investigação e as que evitam erro silencioso.
 
-O e-mail do próprio gestor vem antes do e-mail de quem solicitou a vaga, porque
-quem abre a vaga no MPCore às vezes é o RH e não a chefia da loja. Como só o
-gerente tem perfil de acesso, na prática o supervisor cai no solicitante — que
-nesses casos é o gerente da loja dele.
+**Idempotência por pessoa, não por data do chamado.**
+A chave é `cpf + data_do_evento`. Cobre três casos que a data do chamado não
+cobria: rodar duas vezes no mesmo dia, ficar um dia sem rodar, e admissão com data
+futura — que existe na base e, sem isso, era pedida de novo todo dia até a data
+chegar.
 
-O e-mail nunca é deduzido do nome. Deduzir pelo padrão `nome.sobrenome@` foi
-testado e errou 3 em 10 — há gestores com Gmail pessoal e outros em domínio
-diferente.
+**O chamado de rescisão só sai no dia seguinte ao desligamento.**
+`data_rescisao <= current_date - 1`. Sem esse limite, o acesso cairia com a pessoa
+ainda trabalhando.
 
-O campo `supervisor` do MPCore é texto livre e quase sempre traz só o primeiro
-nome, em caixa variada (`Ana`, `ana`, `ANA`). Primeiro nome + loja
-resolve sem ambiguidade na prática.
+**Erro de API mantém o chamado em acompanhamento.**
+Só conclusão, lixeira, arquivamento, mesclagem ou 404 encerram. Tratar erro de
+servidor como conclusão largaria um chamado que a TI nunca atendeu.
+
+**Deduplicação por CPF na origem.**
+Quem foi transferido tem uma linha por loja na base — até cinco para a mesma
+pessoa e a mesma data. Sem `DISTINCT ON (cpf)`, saía repetida no chamado.
+
+**Modo simulação.**
+Criado depois de um chamado duplicado aberto por acidente ao usar o ponto de
+entrada real como teste. Faz tudo menos abrir e gravar.
+
+**Migração automática de schema.**
+`CREATE TABLE IF NOT EXISTS` não altera tabela existente, então as colunas são
+conferidas à parte e a nova é preenchida com o default — o deploy não exige
+migração manual.
+
+---
+
+## Particularidades da API
+
+Comportamentos descobertos por engenharia reversa, ausentes da documentação.
+
+| Comportamento | Consequência |
+|---|---|
+| Seguidor só entra por `usuarioKey`; por e-mail devolve `500` mesmo com usuário existente | o `usuarioKey` é resolvido pelo e-mail antes de enviar |
+| `GET /usuarios` ignora o parâmetro `filtro` e devolve sempre os mesmos 10 | os campos do filtro vão achatados na query |
+| A API adiciona a conta de integração e o solicitante como seguidores; repetir um deles devolve `500` | essas chaves são descartadas antes do envio |
+| Chamado inexistente devolve `404`, não corpo vazio | só o `404` encerra o acompanhamento |
+| `kanbanStatus.fim` indica etapa final | mais confiável que comparar o id da etapa, que varia por quadro |
+
+---
 
 ## Tabelas de controle
 
-Banco `rh`, criadas automaticamente.
+Criadas e migradas automaticamente na primeira execução.
 
-**`cham_admitidos`** — os chamados e seus status
-
-| Coluna | Tipo | |
+| Tabela | Chave | Para que serve |
 |---|---|---|
-| `chamado_aceletato_id` | integer | ticketKey do Acelerato (PK) |
-| `data` | date | data de criação do chamado |
-| `status` | text | `aberto`, `concluido` ou `nao_encontrado` |
+| `cham_admitidos` | `chamado_id` | status de cada chamado, com `tipo` (admissão/rescisão) |
+| `cham_admitidos_acesso` | `cpf + data_admissao` | quem já teve acesso pedido |
+| `cham_rescindidos_acesso` | `cpf + data_rescisao` | quem já teve inativação pedida |
 
-**`cham_admitidos_acesso`** — quem já teve acesso pedido
+Os dois tipos de chamado dividem a tabela de status porque o acompanhamento é
+idêntico — um laço só cobre os dois.
 
-| Coluna | Tipo | |
-|---|---|---|
-| `cpf` | varchar(11) | PK composta com `data_admissao` |
-| `data_admissao` | date | PK composta com `cpf` |
-| `nome` | varchar(120) | o nome que foi para o chamado |
-| `chamado_aceletato_id` | integer | em qual chamado entrou |
-| `data` | date | quando foi pedido |
-
-O `nome` é cópia proposital, não espelho de `cad_funcionario`: deixa a tabela
-legível sem join e registra o que a TI recebeu de fato, mesmo que o cadastro
-seja corrigido depois.
-
-## Módulos
-
-| Arquivo | Responsabilidade |
-|---|---|
-| `main.py` | ponto de entrada |
-| `rotina_de_acessos.py` | orquestra a execução e devolve o resultado |
-| `fonte_rh.py` | leitura do banco `rh` (admitidos e chefia) |
-| `fonte_mpcore.py` | leitura do banco `mpcore` (vagas e perfis de acesso) |
-| `gestores.py` | decide quem é o gestor — lógica pura, sem banco |
-| `chamado_acessos.py` | monta o título e a tabela HTML do chamado |
-| `acelerato.py` | cliente da API do Acelerato |
-| `models.py` | modelos peewee das tabelas de controle |
-| `repository.py` | acesso às tabelas de controle |
-
-Cada módulo de fonte lê um banco só. As dependências entram pelo construtor, e
-quem lê o `.env` é a fábrica `criar_rotina_de_acessos()` — importar qualquer
-módulo não abre conexão.
+---
 
 ## Configuração
 
-Variáveis no `.env`, ao lado dos módulos:
-
-Copie o `.env.example` para `.env` e preencha. O `.env` não vai para o
-repositório — está no `.gitignore`.
+Copie o `.env.example` para `.env` e preencha. O `.env` não vai para o repositório.
 
 | Variável | |
 |---|---|
-| `ACELERATO_URL_BASE` | instância do Acelerato |
+| `ACELERATO_URL_BASE` | instância do service desk |
 | `EMAIL_ACELERATO` / `TOKEN_ACELERATO` | conta e token da API |
-| `ACELERATO_EMAIL_SOLICITANTE` | quem aparece como solicitante |
-| `ACELERATO_CATEGORIA_KEY` | categoria do chamado; tem que ser folha |
+| `ACELERATO_EMAIL_SOLICITANTE` | quem assina os chamados |
+| `ACELERATO_CATEGORIA_KEY` | categoria do chamado de admissão |
+| `ACELERATO_CATEGORIA_KEY_RESCISAO` | categoria do chamado de rescisão |
 | `ACELERATO_SEGUIDORES_FIXOS` | quem entra em cópia sempre, separado por vírgula |
-| `RH_FONTE_DB_*` | banco do RH |
-| `MPCORE_DB_*` | banco do MPCore |
+| `DB_*` / `RH_FONTE_DB_*` | base do RH |
+| `MPCORE_DB_*` | base de recrutamento |
 
-## Particularidades da API do Acelerato
+```bash
+pip install -r requirements.txt
+```
 
-Coisas descobertas na integração que não estão óbvias na documentação:
-
-- **Seguidor entra só por `usuarioKey`.** Mandar `{"email": ...}` em `seguidores`
-  devolve `HTTP 500 "Erro desconhecido"`, mesmo para usuário existente. O
-  `usuarioKey` é resolvido pelo e-mail com `GET /usuarios?email=`.
-- **`GET /usuarios` precisa dos campos do filtro achatados na query.** Passar
-  `filtro=` é silenciosamente ignorado: devolve sempre os mesmos 10 usuários.
-- **O Acelerato já adiciona a conta da API e o solicitante como seguidores.**
-  Repetir qualquer um dos dois também devolve 500, então o cliente descarta
-  essas chaves antes de enviar.
-- **Chamado inexistente devolve `404`.** Qualquer outro erro HTTP estoura
-  `ErroDoAcelerato` e o chamado continua em acompanhamento: tratar erro de
-  servidor como conclusão largaria um chamado que a TI nunca atendeu.
-- **Sair de circulação não é só concluir.** A TI pode mandar o chamado para a
-  lixeira, arquivar, mesclar num outro ou marcar como spam — `lixeira`,
-  `arquivado`, `mesclado` e `alvoDeSpam`. Todos encerram o acompanhamento.
-  `suspenso` e `impedido` não encerram: o chamado continua vivo, só travado.
-- **`kanbanStatus.fim`** indica etapa final e é mais confiável que comparar
-  `kanbanStatusKey == 15`, porque cada quadro numera suas próprias etapas.
+---
 
 ## Limitações conhecidas
 
-- Unidades sem perfil de acesso no MPCore saem sem gestor em cópia: **3**
-  (ADM/CD), **5** (E-commerce), **18** (Salvados Fanny), **100** e **101**
-  (Administrativo), **306** (ADM/CD ES). É cadastro faltando no MPCore, não
-  código — criando o perfil, passa a funcionar sozinho.
-- Loja sem gerente de loja ativo no banco `rh` sai sem supervisor na tabela.
-- Gestor sem conta no Acelerato aparece na tabela do chamado, mas não entra em
-  cópia.
+- Unidade sem perfil de acesso cadastrado na base de recrutamento sai sem gestor em
+  cópia. É cadastro faltando, não código.
+- Loja sem gerente ativo na base do RH sai sem supervisor na tabela.
+- Gestor sem conta no service desk aparece na tabela, mas não entra em cópia.
+- A janela de 2 dias não alcança desligamento antigo; recuperar atraso exige rodar
+  uma vez com janela maior.
