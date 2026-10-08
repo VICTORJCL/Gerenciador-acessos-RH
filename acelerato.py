@@ -47,12 +47,14 @@ class AceleratoAPI:
         email_solicitante: str,
         url_base: str,
         categoria_key: int = 0,
+        categoria_key_rescisao: int = 0,
         chaves_automaticas: Sequence[int] = (),
         timeout_em_segundos: int = TIMEOUT_EM_SEGUNDOS,
     ):
         self._autenticacao = HTTPBasicAuth(email, token)
         self._email_solicitante = email_solicitante
         self._categoria_key = categoria_key
+        self.categoria_key_rescisao = categoria_key_rescisao
         self._chaves_automaticas = set(chaves_automaticas)
         self._chave_por_email: dict[str, int] = {}
         self._url_base = url_base
@@ -63,13 +65,14 @@ class AceleratoAPI:
         titulo: str,
         descricao: str,
         chaves_dos_seguidores: Sequence[int] = (),
+        categoria_key: int | None = None,
     ) -> int:
         # Seguidor só entra por usuarioKey: `{"email": ...}` devolve 500, e
         # repetir um seguidor que o Acelerato já pôs também.
         payload = {
             "titulo": titulo,
             "descricao": descricao,
-            "categoria": {"categoriaKey": self._categoria_key},
+            "categoria": {"categoriaKey": categoria_key or self._categoria_key},
             "solicitante": {"email": self._email_solicitante},
         }
         seguidores = [
@@ -202,6 +205,7 @@ def criar_cliente_acelerato() -> AceleratoAPI:
         email_solicitante=solicitante,
         url_base=_ler_variavel("ACELERATO_URL_BASE"),
         categoria_key=int(_ler_variavel("ACELERATO_CATEGORIA_KEY")),
+        categoria_key_rescisao=int(_ler_variavel("ACELERATO_CATEGORIA_KEY_RESCISAO")),
     )
     cliente.ignorar_como_seguidores(
         [cliente.buscar_chave_do_usuario(email), cliente.buscar_chave_do_usuario(solicitante)]

@@ -10,6 +10,9 @@ COLUNAS_DA_TABELA = ("Filial", "Nome", "CPF", "Função", "Data Admissão", "Sup
 ABERTURA = "Bom dia"
 PEDIDO = "Segue os colaboradores abaixo para cadastro do Cód Zanthus."
 AVISO_DE_COPIA = "Enviar para os gerentes que estão em cópia."
+PEDIDO_DE_CONFERENCIA = (
+    "Favor conferir os gestores em cópia e acrescentar quem estiver faltando."
+)
 
 
 def montar_titulo(admitidos: Sequence[Admitido]) -> str:
@@ -30,6 +33,7 @@ def montar_descricao(admitidos: Sequence[Admitido]) -> str:
         f"<p>{ABERTURA}</p>"
         f"<p>{PEDIDO}</p>"
         f"<p>{AVISO_DE_COPIA}</p>"
+        f"<p>{PEDIDO_DE_CONFERENCIA}</p>"
         f'<table border="1" cellpadding="4" cellspacing="0">'
         f"<thead><tr>{cabecalho}</tr></thead>"
         f"<tbody>{linhas}</tbody>"
