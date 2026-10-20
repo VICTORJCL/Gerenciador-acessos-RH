@@ -4,6 +4,7 @@ from typing import Callable, Iterable, Sequence
 
 from .fonte_mpcore import VagaDoAdmitido
 from .fonte_rh import Chefe
+from .fonte_webfopag import GestorDoEmpregado
 
 CARGO_DE_GERENTE = "gerente de loja"
 PALAVRAS_IGNORADAS = {"de", "da", "do", "dos", "das", "e"}
@@ -37,13 +38,44 @@ def resolver_gestor(
     chefia_da_loja: Sequence[Chefe],
     emails_da_loja: Sequence[str] = (),
     buscar_chave: Callable[[str], int] | None = None,
+    gestor_do_webfopag: GestorDoEmpregado | None = None,
 ) -> Gestor | None:
-    gestor = _escolher(loja, vaga, chefia_da_loja, emails_da_loja)
+    gestor = _do_webfopag(loja, gestor_do_webfopag, emails_da_loja) or _escolher(
+        loja, vaga, chefia_da_loja, emails_da_loja
+    )
     if gestor is None:
         return None
     if buscar_chave is None or not gestor.email:
         return gestor
     return replace(gestor, chave_no_acelerato=buscar_chave(gestor.email))
+
+
+def _do_webfopag(
+    loja: int,
+    gestor: GestorDoEmpregado | None,
+    emails_da_loja: Sequence[str],
+) -> Gestor | None:
+    """Hierarquia do Webfopag: o vínculo cadastrado, não inferência por loja.
+
+    É a primeira fonte porque o RH reportou que o campo da vaga trazia o
+    supervisor direto em vez do gerente. O e-mail continua vindo do perfil de
+    acesso, casado pelo nome — o Webfopag não devolve e-mail de gestor.
+    """
+    if gestor is None or not gestor.nome:
+        return None
+    return Gestor(
+        nome=gestor.nome.title(),
+        cargo="",
+        loja=loja,
+        email=_email_por_nome(gestor.nome, emails_da_loja),
+        origem="hierarquia do Webfopag",
+    )
+
+
+def _email_por_nome(nome: str, emails_da_loja: Sequence[str]) -> str:
+    do_nome = _tokens(nome)
+    casados = [email for email in emails_da_loja if _tokens(email.split("@")[0]) & do_nome]
+    return casados[0] if len(casados) == 1 else ""
 
 
 def _escolher(

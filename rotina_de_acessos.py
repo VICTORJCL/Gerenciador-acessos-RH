@@ -37,6 +37,7 @@ class RotinaDeAcessos:
         vagas: "RepositorioDeVagas",
         emails_da_loja: RepositorioDeEmailsDaLoja,
         seguidores_fixos: Sequence[int] = (),
+        webfopag=None,
         dias_de_admissao: int = 2,
         simular: bool = False,
     ):
@@ -47,6 +48,8 @@ class RotinaDeAcessos:
         self._vagas = vagas
         self._emails_da_loja = emails_da_loja
         self._seguidores_fixos = list(seguidores_fixos)
+        self._webfopag = webfopag
+        self._falha_do_webfopag = ""
         self._simular = simular
         self._dias_de_admissao = dias_de_admissao
 
@@ -65,6 +68,8 @@ class RotinaDeAcessos:
             return
 
         gestores = self._resolver_gestores(admitidos)
+        if self._falha_do_webfopag:
+            resultado.falhas.append(self._falha_do_webfopag)
         admitidos, chaves = aplicar_gestores(admitidos, gestores)
         # O RH acompanha todo chamado, independente de quem são os gestores.
         chaves = chaves + [c for c in self._seguidores_fixos if c not in chaves]
@@ -94,6 +99,7 @@ class RotinaDeAcessos:
         vagas = self._vagas.buscar_por_cpf([a.cpf for a in admitidos])
         chefia = self._chefia.buscar_por_loja(lojas)
         emails = self._emails_da_loja.buscar_por_loja(lojas)
+        do_webfopag = self._gestores_do_webfopag([a.cpf for a in admitidos])
 
         gestores = {}
         for admitido in admitidos:
@@ -103,10 +109,22 @@ class RotinaDeAcessos:
                 chefia.get(admitido.loja, []),
                 emails.get(admitido.loja, []),
                 self._acelerato.buscar_chave_do_usuario,
+                do_webfopag.get(admitido.cpf),
             )
             if gestor is not None:
                 gestores[admitido.cpf] = gestor
         return gestores
+
+    def _gestores_do_webfopag(self, cpfs) -> dict:
+        # Webfopag fora do ar não pode derrubar o chamado: sem a hierarquia a
+        # cascata antiga assume, com o gestor menos preciso.
+        if self._webfopag is None:
+            return {}
+        try:
+            return self._webfopag.buscar_por_cpf(cpfs)
+        except Exception as erro:
+            self._falha_do_webfopag = f"Hierarquia do Webfopag indisponível: {erro}"
+            return {}
 
     def _acompanhar_chamados_abertos(self, resultado: ResultadoDaRotina) -> None:
         if self._simular:
@@ -132,6 +150,7 @@ class RotinaDeAcessos:
 def criar_rotina_de_acessos(dias_de_admissao: int = 2, simular: bool = False) -> RotinaDeAcessos:
     # `simular=True` faz tudo menos abrir chamado e gravar.
     from .acelerato import criar_cliente_acelerato
+    from .fonte_webfopag import criar_repositorio_de_gestores
     from .models import conectar_mpcore, db
 
     if db.is_closed():
@@ -150,6 +169,7 @@ def criar_rotina_de_acessos(dias_de_admissao: int = 2, simular: bool = False) ->
         vagas=RepositorioDeVagas(mpcore),
         emails_da_loja=RepositorioDeEmailsDaLoja(mpcore),
         seguidores_fixos=_chaves_dos_seguidores_fixos(acelerato),
+        webfopag=_webfopag_ou_nada(),
         simular=simular,
         dias_de_admissao=dias_de_admissao,
     )
@@ -163,3 +183,14 @@ def _chaves_dos_seguidores_fixos(acelerato) -> list[int]:
     emails = [parte.strip() for parte in brutos.split(",") if parte.strip()]
     chaves = [acelerato.buscar_chave_do_usuario(email) for email in emails]
     return [chave for chave in chaves if chave]
+
+
+def _webfopag_ou_nada():
+    # A autenticação acontece aqui, na borda: falhando, a rotina segue sem a
+    # hierarquia em vez de não abrir chamado nenhum.
+    from .fonte_webfopag import criar_repositorio_de_gestores
+
+    try:
+        return criar_repositorio_de_gestores()
+    except Exception:
+        return None
