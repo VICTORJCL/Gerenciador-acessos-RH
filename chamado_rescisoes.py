@@ -5,7 +5,7 @@ from .acelerato import AceleratoAPI
 from .fonte_rh import Rescindido
 
 COLUNAS_DA_TABELA = ("Filial", "Nome", "CPF", "Função", "Data Rescisão")
-TITULO = "Inativar acessos"
+TITULO = "Inativar acessos."
 ABERTURA = "Bom dia"
 PEDIDO = "Poderiam inativar os acessos abaixo."
 
