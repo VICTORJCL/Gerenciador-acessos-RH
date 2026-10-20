@@ -11,7 +11,7 @@ ABERTURA = "Bom dia"
 PEDIDO = "Segue os colaboradores abaixo para cadastro do Cód Zanthus."
 AVISO_DE_COPIA = "Enviar para os gerentes que estão em cópia."
 PEDIDO_DE_CONFERENCIA = (
-    "Favor conferir os gestores em cópia e acrescentar quem estiver faltando."
+    "Favor conferir os gestores em cópia e acrescentar quem estiver faltando.."
 )
 
 
